@@ -1,0 +1,86 @@
+DESTDIR	?=
+PREFIX	?= /usr/local
+bindir	= $(PREFIX)/bin
+sbindir	= $(PREFIX)/sbin
+mandir	= $(PREFIX)/share/man
+man3dir	= $(mandir)/man3
+man8dir	= $(mandir)/man8
+incdir	= $(PREFIX)/include
+libdir	= $(PREFIX)/lib
+
+NDK            = /ssd2/android-ndk-r10e
+## NDK configuration (clang)
+
+# NDK Version
+NDK_TARGETVER  = 21
+ANDROID_NDK = /ssd2/android-ndk-r10e
+ARCH = arm64
+
+# Target arch - here aarch64 for android
+NDK_TARGETARCH = aarch64-linux-android
+CC = aarch64-linux-android21-clang
+# Target CPU (ARMv8)
+NDK_TARGETSHORTARCH = arm64
+
+# Toolchain version
+NDK_TOOLVER  = 4.9
+
+# Architecture of a machine that does cross compilation
+NDK_HOSTARCH = linux-x86_64
+
+# Set needed preprocessor symbols
+NDK_TOOLS    = $(NDK)/toolchains/llvm/prebuilt/$(NDK_HOSTARCH)/bin
+NDK_TOOL     = $(NDK_TOOLS)/clang
+NDK_LIBS     = /ssd2/android-ndk-r10e/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/lib64
+NDK_INCLUDES = -I$(NDK)/sysroot/usr/include \
+               -I$(NDK)/sysroot/usr/include/$(NDK_TARGETARCH) \
+               -I$(NDK)/platforms/android-$(NDK_TARGETVER)/arch-$(NDK_TARGETSHORTARCH)/usr/include
+NDK_SYSROOT  = /ssd2/android-ndk-r10e/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/sysroot
+
+# Options common to compiler and linker
+OPT          = $(MODE_FLAGS) \
+               -std=c99 \
+               -fPIE \
+               -Wall
+
+# Compiler options
+CFLAGS       = $(OPT) \
+				-DMODEM -O2  -Wunused -Wno-unused-result  -D BUILDNO=$(BUILDNO) $(LIBS)\
+				-static \
+               $(NDK_INCLUDES)
+
+# Linker options
+LDFLAGS      = $(OPT) \
+               $(MODE_FLAGS) \
+               -pie \
+               -static \
+               --sysroot=$(NDK_SYSROOT) \
+               -B $(ANDROID_NDK)/toolchains/$(NDK_TARGETARCH)-$(NDK_TOOLVER)/prebuilt/linux-x86_64/$(NDK_TARGETARCH)/bin \
+               -L$(NDK_LIBS)
+
+
+BUILDNO  = $(shell cat build)
+OUTDIR   = modem-bin
+TARGET = $(OUTDIR)/balong-nvtool $(OUTDIR)/nvdload-split $(OUTDIR)/nvdload-combine
+
+.PHONY: all clean
+
+all:    $(TARGET)
+
+clean:
+	rm *.o
+	rm $(TARGET)
+
+$(OUTDIR)/balong-nvtool: balong-nvtool.o nvio.o nvid.o sha2.o nvcrc.o
+	$(CC) $^ -o $@ -fpic -D_REENTRANT $(CFLAGS)  $(LIBS)
+	@echo Current buid: $(BUILDNO)
+
+$(OUTDIR)/nvdload-split: nvdload-split.o
+	$(CC) $^ -o $@ $(LIBS)
+
+$(OUTDIR)/nvdload-combine: nvdload-combine.o
+	$(CC)  $^ -o $@ $(LIBS)
+
+upload: $(OUTDIR)/balong-nvtool
+	@wput -u modem-bin/balong-nvtool ftp://modem/online/
+
